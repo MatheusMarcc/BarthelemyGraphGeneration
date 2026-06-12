@@ -1,15 +1,3 @@
-"""
-server.py — Barthelemy Spatial Scale-Free Graph + PCC (Fleury) + MST (Kruskal/Prim)
-
-Uso:
-    python server.py
-    → abre http://localhost:8000 no navegador
-    → o usuário digita n NA INTERFACE e clica em "Gerar Grafo"
-    → o servidor gera o grafo aleatório e devolve o JSON direto (sem terminal)
-
-Requisitos: pip install networkx
-"""
-
 import json, math, random, itertools, heapq, os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -23,12 +11,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # 1. BARTHELEMY SPATIAL SCALE-FREE MODEL
 # ─────────────────────────────────────────────────────────────
 def barthelemy_graph(n: int) -> nx.Graph:
-    """
-    Crescimento incremental:
-      - Nós posicionados aleatoriamente em [0,1]²
-      - Novo nó conecta a m vizinhos com probabilidade ∝ k_i / d(new, i)
-      - Pesos das arestas ∈ [1, 20]
-    """
     seed = random.randint(0, 999999)
     rng  = random.Random(seed)
     m    = max(2, int(math.log2(n)))
