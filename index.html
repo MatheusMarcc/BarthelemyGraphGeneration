@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Teoria dos Grafos — Barthelemy · PCC · MST</title>
+<style>
+:root {
+  --bg:       #080810;
+  --surface:  #0f0f1a;
+  --surface2: #13131f;
+  --border:   #1c1c2e;
+  --red:      #e63946;
+  --purple:   #8338ec;
+  --green:    #06d6a0;
+  --navy:     #1d3461;
+  --blue:     #4895ef;
+  --text:     #dde1f0;
+  --muted:    #52527a;
+  --mono:     'Courier New', monospace;
+  --sans:     'Segoe UI', system-ui, sans-serif;
+  --r:        7px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); display: flex; flex-direction: column; }
+
+/* ── HEADER ── */
+header {
+  flex-shrink: 0;
+  background: linear-gradient(90deg,#0b0b18,#120b1e,#0b1018);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  height: 56px;
+  display: flex; align-items: center; gap: 16px;
+}
+.logo { font-size: 1rem; font-weight: 800; letter-spacing:.05em; white-space:nowrap; }
+.logo span { color: var(--red); }
+.sep { width:1px; height:28px; background:var(--border); flex-shrink:0; }
+.ctrl-group { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+input[type=number] {
+  width:80px; background:var(--surface2); border:1px solid var(--border);
+  color:var(--text); font-family:var(--mono); font-size:.85rem;
+  padding:6px 10px; border-radius:var(--r); outline:none;
+}
+input[type=number]:focus { border-color:var(--blue); }
+button {
+  background:var(--surface2); border:1px solid var(--border);
+  color:var(--text); font-family:var(--sans); font-size:.8rem;
+  padding:6px 13px; border-radius:var(--r); cursor:pointer;
+  transition:border-color .15s, background .15s; white-space:nowrap;
+}
+button:hover { border-color:var(--blue); }
+button:disabled { opacity:.4; cursor:wait; }
+.btn-gen  { background:var(--red);    border-color:var(--red);    color:#fff; font-weight:700; }
+.btn-gen:hover  { background:#c1121f; border-color:#c1121f; }
+.btn-pcc  { background:var(--navy);   border-color:var(--blue);   color:var(--blue);   font-weight:700; }
+.btn-pcc:hover  { background:#243d72; }
+.btn-mst  { background:#1a0d2e;       border-color:var(--purple); color:var(--purple); font-weight:700; }
+.btn-mst:hover  { background:#26124a; }
+.btn-play { background:#063a2e;       border-color:var(--green);  color:var(--green);  font-weight:700; }
+.btn-play:hover { background:#094d3d; }
+.btn-stop { background:#1a1a2a; border-color:#333; color:var(--muted); }
+select {
+  background:var(--surface2); border:1px solid var(--border);
+  color:var(--text); font-family:var(--sans); font-size:.8rem;
+  padding:6px 10px; border-radius:var(--r); outline:none; cursor:pointer;
+}
+select:focus { border-color:var(--purple); }
+.speed-wrap { display:flex; align-items:center; gap:6px; font-size:.75rem; color:var(--muted); }
+input[type=range] { accent-color:var(--green); width:80px; cursor:pointer; }
+#mode-tag {
+  font-size:.7rem; font-weight:800; letter-spacing:.1em;
+  padding:4px 10px; border-radius:4px;
+  border:1px solid var(--border); background:var(--surface2); color:var(--muted);
+  white-space:nowrap;
+}
+
+/* ── WORKSPACE ── */
+.workspace {
+  flex:1; display:grid; min-height:0;
+  grid-template-columns: 1fr 300px;
+  grid-template-rows: 1fr 220px;
+  gap:1px; background:var(--border);
+}
+.pane { background:var(--surface); position:relative; overflow:hidden; }
+.pane-label {
+  position:absolute; top:9px; left:12px;
+  font-size:.65rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--muted); z-index:5; pointer-events:none;
+}
+
+/* CANVAS */
+#pane-canvas { grid-column:1; grid-row:1; }
+canvas { display:block; width:100%; height:100%; }
+
+/* SIDEBAR */
+#sidebar {
+  grid-column:2; grid-row:1/3;
+  overflow-y:auto; padding:12px;
+  display:flex; flex-direction:column; gap:10px;
+}
+.card {
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); padding:11px 13px;
+}
+.card-title {
+  font-size:.68rem; font-weight:800; letter-spacing:.1em;
+  text-transform:uppercase; margin-bottom:9px;
+}
+.ct-blue   { color:var(--blue); }
+.ct-red    { color:var(--red); }
+.ct-purple { color:var(--purple); }
+.ct-green  { color:var(--green); }
+.ct-muted  { color:var(--muted); }
+.row {
+  display:flex; justify-content:space-between; align-items:baseline;
+  padding:3px 0; border-bottom:1px solid #17172a; font-size:.8rem;
+}
+.row:last-child { border-bottom:none; }
+.val { font-family:var(--mono); font-size:.82rem; }
+.val-blue   { color:var(--blue); }
+.val-red    { color:var(--red); }
+.val-purple { color:var(--purple); }
+.val-green  { color:var(--green); }
+
+#circuit-scroll {
+  font-family:var(--mono); font-size:.68rem; color:var(--green);
+  max-height:88px; overflow-y:auto; line-height:1.8;
+  word-break:break-all; margin-top:6px;
+}
+.legend-row { display:flex; align-items:center; gap:8px; font-size:.76rem; padding:3px 0; }
+.dot  { width:10px;height:10px;border-radius:50%;flex-shrink:0; }
+.dash { width:22px;height:3px;border-radius:2px;flex-shrink:0; }
+
+#complexity-body { font-family:var(--mono); font-size:.68rem; color:var(--muted); line-height:2; }
+#complexity-body span { color:var(--blue); }
+
+/* MATRIX PANE */
+#pane-matrix { grid-column:1; grid-row:2; overflow:auto; padding:30px 12px 12px; }
+table { border-collapse:collapse; font-family:var(--mono); font-size:.63rem; white-space:nowrap; }
+th {
+  background:#0e0e1c; color:var(--muted); padding:3px 7px;
+  border:1px solid var(--border); position:sticky; top:0; font-weight:600; z-index:2;
+}
+th:first-child { position:sticky; left:0; z-index:3; }
+td { padding:2px 7px; border:1px solid #14142a; text-align:center; color:var(--muted); }
+td.nz { color:var(--blue); background:#0a1220; }
+td.di { color:#1e1e38; }
+
+/* PROGRESS */
+#prog-wrap { position:absolute; bottom:0; left:0; right:0; height:3px; background:#14142a; }
+#prog-bar  { height:100%; width:0; background:linear-gradient(90deg,var(--red),var(--purple),var(--blue)); transition:width .08s; }
+#step-info { position:absolute; bottom:10px; right:12px; font-family:var(--mono); font-size:.7rem; color:var(--muted); }
+
+/* TOOLTIP */
+#tip {
+  position:fixed; background:#12122a; border:1px solid var(--blue);
+  border-radius:6px; padding:6px 10px; font-family:var(--mono); font-size:.72rem;
+  pointer-events:none; opacity:0; transition:opacity .12s; z-index:99;
+}
+
+/* empty state */
+#empty {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:10px;
+  color:var(--muted); font-size:.9rem; pointer-events:none;
+}
+#empty svg { opacity:.3; }
+
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-track { background:#0a0a14; }
+::-webkit-scrollbar-thumb { background:#252540; border-radius:3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Graph<span>Theory</span></div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <label style="font-size:.78rem;color:var(--muted)">Nós (n):</label>
+    <input type="number" id="n-input" value="20" min="4" max="500" step="1"/>
+    <button class="btn-gen" id="btn-gen">⟳ Gerar Grafo</button>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <button class="btn-pcc" id="btn-pcc">🗺 PCC</button>
+    <select id="mst-sel"><option value="kruskal">Kruskal</option><option value="prim">Prim</option></select>
+    <button class="btn-mst" id="btn-mst">🌲 MST</button>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <button class="btn-play" id="btn-play">▶ Animar Fleury</button>
+    <button class="btn-stop" id="btn-stop" style="display:none">■ Parar</button>
+    <div class="speed-wrap">
+      <span>vel.</span>
+      <input type="range" id="speed" min="30" max="980" value="500"/>
+    </div>
+  </div>
+  <div class="sep"></div>
+  <div id="mode-tag">SEM GRAFO</div>
+</header>
+
+<div class="workspace">
+
+  <div class="pane" id="pane-canvas">
+    <span class="pane-label">VISUALIZAÇÃO GEOMÉTRICA</span>
+    <canvas id="cv"></canvas>
+    <div id="empty">
+      <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+        <circle cx="15" cy="15" r="6" stroke="#4895ef" stroke-width="1.5"/>
+        <circle cx="45" cy="15" r="6" stroke="#4895ef" stroke-width="1.5"/>
+        <circle cx="30" cy="45" r="6" stroke="#4895ef" stroke-width="1.5"/>
+        <line x1="21" y1="15" x2="39" y2="15" stroke="#4895ef" stroke-width="1"/>
+        <line x1="18" y1="20" x2="27" y2="40" stroke="#4895ef" stroke-width="1"/>
+        <line x1="42" y1="20" x2="33" y2="40" stroke="#4895ef" stroke-width="1"/>
+      </svg>
+      <span>Digite n e clique em <strong>Gerar Grafo</strong></span>
+    </div>
+    <div id="prog-wrap"><div id="prog-bar"></div></div>
+    <div id="step-info"></div>
+  </div>
+
+  <div id="sidebar">
+    <div class="card">
+      <div class="card-title ct-blue">Grafo</div>
+      <div class="row"><span>Nós (n)</span><span class="val val-blue" id="s-n">—</span></div>
+      <div class="row"><span>Arestas (m)</span><span class="val val-blue" id="s-m">—</span></div>
+      <div class="row"><span>Seed</span><span class="val" id="s-seed" style="color:var(--muted);font-size:.7rem">—</span></div>
+      <div class="row"><span>Grau médio</span><span class="val val-blue" id="s-deg">—</span></div>
+      <div class="row"><span>Nós grau ímpar</span><span class="val val-red" id="s-odd">—</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title ct-red">PCC — Carteiro Chinês</div>
+      <div class="row"><span>Custo original</span><span class="val" id="s-orig">—</span></div>
+      <div class="row"><span>Custo circuito</span><span class="val val-red" id="s-pcc">—</span></div>
+      <div class="row"><span>Overhead</span><span class="val val-red" id="s-over">—</span></div>
+      <div class="row"><span>Arestas duplicadas</span><span class="val val-red" id="s-dup">—</span></div>
+      <div class="row"><span>Ímpares após duplicação</span><span class="val val-green" id="s-odd-after">—</span></div>
+      <div class="row"><span>Passos Fleury</span><span class="val" id="s-steps">—</span></div>
+      <div id="circuit-scroll"></div>
+    </div>
+    <div class="card">
+      <div class="card-title ct-purple">MST</div>
+      <div class="row"><span>Kruskal</span><span class="val val-purple" id="s-kru">—</span></div>
+      <div class="row"><span>Prim</span><span class="val val-purple" id="s-pri">—</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title ct-green">Complexidade</div>
+      <div id="complexity-body"></div>
+    </div>
+    <div class="card">
+      <div class="card-title ct-muted">Legenda</div>
+      <div class="legend-row"><div class="dot" style="background:var(--blue)"></div>Nó normal</div>
+      <div class="legend-row"><div class="dot" style="background:var(--red)"></div>Nó grau ímpar</div>
+      <div class="legend-row"><div class="dot" style="background:var(--green);width:14px;height:14px"></div>Nó atual (Fleury)</div>
+      <div class="legend-row"><div class="dash" style="background:#2a2a4a"></div>Aresta base</div>
+      <div class="legend-row"><div class="dash" style="background:var(--red);opacity:.7"></div>Aresta duplicada (PCC)</div>
+      <div class="legend-row"><div class="dash" style="background:var(--green)"></div>Circuito Fleury</div>
+      <div class="legend-row"><div class="dash" style="background:var(--purple)"></div>MST selecionada</div>
+    </div>
+  </div>
+
+  <div class="pane" id="pane-matrix">
+    <span class="pane-label">MATRIZ DE ADJACÊNCIA</span>
+    <div id="mat-wrap"></div>
+  </div>
+
+</div>
+
+<div id="tip"></div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════
+let D = null;            // dados vindos do servidor
+let mode = "base";       // base | pcc | mst | fleury
+let mstAlgo = "kruskal";
+let animTimer = null;
+
+// progresso de cada animação (cada modo apaga o anterior)
+let baseStep = 0;        // arestas base reveladas
+let pccStep  = 0;        // arestas duplicadas reveladas
+let mstStep  = 0;        // passos do algoritmo MST revelados
+let fleuryStep = 0;      // passos do circuito Euleriano
+
+const cv  = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const $   = id => document.getElementById(id);
+
+// ══════════════════════════════════════════════════
+//  GERAÇÃO — o n vem DA INTERFACE; o servidor gera na hora
+// ══════════════════════════════════════════════════
+async function generateGraph() {
+  stopAnim();
+  const n = parseInt($("n-input").value);
+  if (isNaN(n) || n < 4 || n > 500) { alert("n deve estar entre 4 e 500"); return; }
+
+  const btn = $("btn-gen");
+  btn.disabled = true; btn.textContent = "⟳ Gerando...";
+  setTag("GERANDO...", "#52527a");
+
+  try {
+    const r = await fetch(`/generate?n=${n}&bust=${Date.now()}`);
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || r.status);
+    D = data;
+  } catch (e) {
+    alert(
+      "Não foi possível gerar o grafo.\n\n" +
+      "Verifique se o servidor está rodando:\n  python server.py\n\n" +
+      "Detalhe: " + e.message
+    );
+    btn.disabled = false; btn.textContent = "⟳ Gerar Grafo";
+    setTag("SEM GRAFO", "#52527a");
+    return;
+  }
+
+  btn.disabled = false; btn.textContent = "⟳ Gerar Grafo";
+  $("empty").style.display = "none";
+  updateSidebar();
+  buildMatrix();
+  resizeCanvas();
+  startBaseAnim();          // grafo base entra animado
+}
+
+// ══════════════════════════════════════════════════
+//  CANVAS
+// ══════════════════════════════════════════════════
+function resizeCanvas() {
+  const pane = $("pane-canvas");
+  const dpr  = window.devicePixelRatio || 1;
+  cv.width   = pane.clientWidth  * dpr;
+  cv.height  = pane.clientHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (D) draw();
+}
+window.addEventListener("resize", resizeCanvas);
+
+function W() { return cv.width  / (window.devicePixelRatio||1); }
+function H() { return cv.height / (window.devicePixelRatio||1); }
+
+function nodeXY(node) {
+  const pad = Math.min(W(), H()) * 0.07 + 30;
+  return { x: pad + node.x * (W() - 2*pad),
+           y: pad + node.y * (H() - 2*pad) };
+}
+
+const ekey = (u,v) => `${Math.min(u,v)}_${Math.max(u,v)}`;
+
+// curvatura da k-ésima cópia de uma aresta (0 = reta; 1,2,3.. = curvas paralelas)
+// as curvas SEMPRE começam e terminam exatamente no centro dos vértices.
+function curveK(c) {
+  if (c === 0) return 0;
+  return 26 * Math.ceil(c/2) * (c % 2 === 1 ? 1 : -1);
+}
+
+// desenha aresta como curva quadrática ancorada nos dois vértices
+function edgePath(x1,y1,x2,y2,k) {
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  if (k === 0) { ctx.lineTo(x2, y2); return {mx:(x1+x2)/2, my:(y1+y2)/2}; }
+  const dx = x2-x1, dy = y2-y1, len = Math.hypot(dx,dy) || 1;
+  const px = -dy/len, py = dx/len;                  // perpendicular unitário
+  const cx = (x1+x2)/2 + px*k, cy = (y1+y2)/2 + py*k;
+  ctx.quadraticCurveTo(cx, cy, x2, y2);
+  return {mx:(x1+x2)/2 + px*k/2, my:(y1+y2)/2 + py*k/2}; // ponto médio da curva
+}
+
+// ══════════════════════════════════════════════════
+//  DRAW — renderização EXCLUSIVA por modo
+// ══════════════════════════════════════════════════
+function draw() {
+  if (!D) return;
+  const w = W(), h = H();
+  ctx.clearRect(0, 0, w, h);
+
+  // grid sutil
+  ctx.strokeStyle = "#0e0e1c"; ctx.lineWidth = 1;
+  for (let x = 0; x < w; x += 44) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+  for (let y = 0; y < h; y += 44) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+
+  const nm = {};
+  D.nodes.forEach(n => nm[n.id] = n);
+
+  const showLabels  = D.n <= 60;
+  const showWeights = D.n <= 25;
+
+  if (mode === "base")        drawBase(nm, showWeights);
+  else if (mode === "pcc")    drawPCC(nm, showWeights, false);
+  else if (mode === "fleury") drawPCC(nm, showWeights, true);
+  else if (mode === "mst")    drawMST(nm, showWeights);
+
+  drawNodes(nm, showLabels);
+}
+
+// ── MODO BASE: só o grafo original, arestas surgindo ──
+function drawBase(nm, showWeights) {
+  for (let i = 0; i < Math.min(baseStep, D.edges.length); i++) {
+    const e = D.edges[i];
+    const a = nodeXY(nm[e.source]), b = nodeXY(nm[e.target]);
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "#2a2a4a"; ctx.lineWidth = 1.2;
+    const mid = edgePath(a.x,a.y,b.x,b.y,0); ctx.stroke();
+    if (showWeights) {
+      ctx.fillStyle = "#3a3a60"; ctx.font = "10px Courier New"; ctx.textAlign = "center";
+      ctx.fillText(e.weight, mid.mx, mid.my - 4);
+    }
+  }
+}
+
+// ── MODO PCC / FLEURY: base + arestas DUPLICADAS (multigrafo) ──
+function drawPCC(nm, showWeights, fleuryMode) {
+  // arestas base
+  D.edges.forEach(e => {
+    const a = nodeXY(nm[e.source]), b = nodeXY(nm[e.target]);
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "#1e1e38"; ctx.lineWidth = 1;
+    const mid = edgePath(a.x,a.y,b.x,b.y,0); ctx.stroke();
+    if (showWeights && !fleuryMode) {
+      ctx.fillStyle = "#2a2a4a"; ctx.font = "10px Courier New"; ctx.textAlign = "center";
+      ctx.fillText(e.weight, mid.mx, mid.my - 4);
+    }
+  });
+
+  // arestas duplicadas — cada cópia é uma CURVA ancorada nos vértices
+  const copies = {};   // quantas cópias já desenhadas por par
+  const limit = fleuryMode ? D.pcc.augmented_edges.length : Math.min(pccStep, D.pcc.augmented_edges.length);
+  ctx.setLineDash([6,4]);
+  for (let i = 0; i < limit; i++) {
+    const [u,v,wgt] = D.pcc.augmented_edges[i];
+    const key = ekey(u,v);
+    copies[key] = (copies[key] || 0) + 1;
+    const a = nodeXY(nm[u]), b = nodeXY(nm[v]);
+    const isNew = (!fleuryMode && i === limit-1 && animTimer);
+    ctx.strokeStyle = isNew ? "#ff6b78" : "#e63946aa";
+    ctx.lineWidth   = isNew ? 3 : 2;
+    const mid = edgePath(a.x,a.y,b.x,b.y, curveK(copies[key])); ctx.stroke();
+    if (showWeights && !fleuryMode) {
+      ctx.fillStyle = "#e6394688"; ctx.font = "10px Courier New"; ctx.textAlign = "center";
+      ctx.fillText(wgt, mid.mx, mid.my - 4);
+    }
+  }
+  ctx.setLineDash([]);
+
+  // trilha do Fleury — usa cópia diferente a cada travessia repetida do mesmo par
+  if (fleuryMode && fleuryStep > 0) {
+    const c = D.pcc.circuit;
+    const used = {};
+    for (let i = 0; i < fleuryStep && i < c.length-1; i++) {
+      const key = ekey(c[i], c[i+1]);
+      const pass = used[key] || 0;
+      used[key] = pass + 1;
+      const a = nodeXY(nm[c[i]]), b = nodeXY(nm[c[i+1]]);
+      const t = i / c.length;
+      const g = ctx.createLinearGradient(a.x,a.y,b.x,b.y);
+      g.addColorStop(0, `hsl(${160+t*60},80%,50%)`);
+      g.addColorStop(1, `hsl(${160+(t+.03)*60},80%,60%)`);
+      ctx.strokeStyle = g; ctx.lineWidth = 2.6;
+      // se o par foi invertido (v<u na trilha), espelha a curvatura p/ casar com a cópia
+      const flip = c[i] > c[i+1] ? -1 : 1;
+      edgePath(a.x,a.y,b.x,b.y, curveK(pass)*flip); ctx.stroke();
+    }
+  }
+}
+
+// ── MODO MST: APENAS a árvore, animando o algoritmo ──
+function drawMST(nm, showWeights) {
+  const steps = D[mstAlgo].steps;
+  const limit = Math.min(mstStep, steps.length);
+
+  for (let i = 0; i < limit; i++) {
+    const s = steps[i];
+    const isCur    = (i === limit-1 && animTimer);
+    const rejected = s.accepted === false;
+
+    // arestas rejeitadas (Kruskal: formariam ciclo) só piscam no passo atual
+    if (rejected && !isCur) continue;
+
+    const a = nodeXY(nm[s.u]), b = nodeXY(nm[s.v]);
+    if (rejected) {
+      ctx.setLineDash([4,4]);
+      ctx.strokeStyle = "#e63946"; ctx.lineWidth = 2;
+    } else {
+      ctx.setLineDash([]);
+      ctx.strokeStyle = isCur ? "#06d6a0" : "#8338ec";
+      ctx.lineWidth   = isCur ? 3.2 : 2.5;
+      if (isCur) { ctx.shadowColor = "#06d6a0"; ctx.shadowBlur = 12; }
+    }
+    const mid = edgePath(a.x,a.y,b.x,b.y,0); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.setLineDash([]);
+
+    if (showWeights) {
+      ctx.fillStyle = rejected ? "#e63946" : "#9a6cf0";
+      ctx.font = "10px Courier New"; ctx.textAlign = "center";
+      ctx.fillText(s.w, mid.mx, mid.my - 4);
+    }
+  }
+}
+
+// ── NÓS ──
+function drawNodes(nm, showLabels) {
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const pccDone = (mode === "pcc" && pccStep >= D.pcc.augmented_edges.length) || mode === "fleury";
+
+  let curNode = -1;
+  if (mode === "fleury" && fleuryStep > 0)
+    curNode = D.pcc.circuit[Math.min(fleuryStep, D.pcc.circuit.length-1)];
+
+  D.nodes.forEach(n => {
+    const {x,y} = nodeXY(n);
+    const isCur = n.id === curNode;
+    // após a duplicação do PCC, TODOS os graus ficam pares → ninguém mais é vermelho
+    const deg   = (mode === "pcc" || mode === "fleury") && pccDone ? n.degree_pcc : n.degree;
+    const isOdd = deg % 2 === 1;
+    const r = isCur ? 10 : (D.n <= 50 ? 7 : 4);
+
+    const col = isCur ? "#06d6a0"
+              : (isOdd && mode !== "mst") ? "#e63946"
+              : (mode === "mst") ? "#8338ec"
+              : "#4895ef";
+
+    ctx.shadowColor = col;
+    ctx.shadowBlur  = isCur ? 20 : (isOdd && mode !== "base" ? 8 : 0);
+
+    ctx.beginPath(); ctx.arc(x,y,r+3,0,Math.PI*2);
+    ctx.fillStyle = col + "22"; ctx.fill();
+
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle = col; ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if (showLabels) {
+      ctx.fillStyle = isCur ? "#000" : "#fff";
+      ctx.font = `bold ${r > 6 ? 10 : 8}px Courier New`;
+      ctx.fillText(n.id, x, y);
+    }
+  });
+  ctx.textBaseline = "alphabetic";
+}
+
+// ══════════════════════════════════════════════════
+//  MOTOR DE ANIMAÇÃO — toda troca de modo apaga a anterior
+// ══════════════════════════════════════════════════
+function speedDelay(fast) { return Math.max(20, (1010 - parseInt($("speed").value)) * (fast ? .35 : 1)); }
+
+function animate(total, onStep, onDone, fast) {
+  stopAnim();
+  $("btn-stop").style.display = "";
+  let i = 0;
+  (function tick() {
+    if (i >= total) { stopAnim(); if (onDone) onDone(); draw(); return; }
+    i++;
+    onStep(i);
+    $("prog-bar").style.width = (i/total*100)+"%";
+    draw();
+    animTimer = setTimeout(tick, speedDelay(fast));
+  })();
+}
+
+function stopAnim() {
+  if (animTimer) { clearTimeout(animTimer); animTimer = null; }
+  $("btn-stop").style.display = "none";
+  $("prog-bar").style.width = "0";
+  $("step-info").textContent = "";
+}
+
+// grafo base animado
+function startBaseAnim() {
+  mode = "base"; baseStep = 0; pccStep = 0; mstStep = 0; fleuryStep = 0;
+  setTag("GRAFO BASE", "#4895ef");
+  const total = D.edges.length;
+  animate(total, i => {
+    baseStep = i;
+    $("step-info").textContent = `Construindo: aresta ${i}/${total}`;
+  }, () => { baseStep = total; setTag("GRAFO BASE ✓", "#4895ef"); }, true);
+}
+
+// PCC animado: duplicação das arestas, uma a uma
+function startPCC() {
+  if (!D) return;
+  mode = "pcc"; pccStep = 0; fleuryStep = 0;
+  setTag("PCC — DUPLICANDO ARESTAS", "#e63946");
+  const aug = D.pcc.augmented_edges, total = aug.length;
+  if (total === 0) {        // grafo já Euleriano
+    pccStep = 0; draw();
+    setTag("PCC — GRAFO JÁ EULERIANO ✓", "#e63946");
+    return;
+  }
+  animate(total, i => {
+    pccStep = i;
+    const [u,v,w] = aug[i-1];
+    $("step-info").textContent = `Duplicando aresta (${u},${v}) peso ${w} — ${i}/${total}`;
+  }, () => {
+    pccStep = total;
+    setTag("PCC — MULTIGRAFO EULERIANO ✓", "#e63946");
+  });
+}
+
+// MST animada: mostra SÓ a árvore, passo a passo do algoritmo
+function startMST() {
+  if (!D) return;
+  mstAlgo = $("mst-sel").value;
+  mode = "mst"; mstStep = 0;
+  setTag(`MST — ${mstAlgo.toUpperCase()}`, "#8338ec");
+  const steps = D[mstAlgo].steps, total = steps.length;
+  animate(total, i => {
+    mstStep = i;
+    const s = steps[i-1];
+    $("step-info").textContent = mstAlgo === "kruskal"
+      ? `Kruskal: aresta (${s.u},${s.v}) w=${s.w} — ${s.accepted ? "ACEITA" : "REJEITADA (ciclo)"}`
+      : `Prim: adiciona (${s.u},${s.v}) w=${s.w}`;
+  }, () => {
+    mstStep = total;
+    setTag(`MST ${mstAlgo.toUpperCase()} ✓ custo ${D[mstAlgo].total_cost}`, "#8338ec");
+  });
+}
+
+// Fleury animado sobre o multigrafo do PCC
+function startFleury() {
+  if (!D) return;
+  mode = "fleury"; pccStep = D.pcc.augmented_edges.length; fleuryStep = 0;
+  setTag("FLEURY ANIMADO", "#06d6a0");
+  const c = D.pcc.circuit, total = c.length - 1;
+  animate(total, i => {
+    fleuryStep = i;
+    $("step-info").textContent = `Passo ${i}/${total} — nó ${c[i]}`;
+  }, () => {
+    fleuryStep = total;
+    setTag("FLEURY COMPLETO ✓", "#06d6a0");
+  });
+}
+
+function setTag(txt, col) {
+  const el = $("mode-tag");
+  el.textContent = txt; el.style.color = col;
+  el.style.borderColor = col+"55";
+}
+
+// ══════════════════════════════════════════════════
+//  SIDEBAR / MATRIZ
+// ══════════════════════════════════════════════════
+function updateSidebar() {
+  if (!D) return;
+  const n = D.n, m = D.m;
+  const odd = D.nodes.filter(nd => nd.degree%2===1).length;
+  const oddAfter = D.nodes.filter(nd => nd.degree_pcc%2===1).length;
+  $("s-n").textContent    = n;
+  $("s-m").textContent    = m;
+  $("s-seed").textContent = D.seed;
+  $("s-deg").textContent  = (2*m/n).toFixed(2);
+  $("s-odd").textContent  = odd;
+
+  $("s-orig").textContent      = D.pcc.original_cost;
+  $("s-pcc").textContent       = D.pcc.total_cost;
+  $("s-over").textContent      = `+${D.pcc.overhead_pct}%`;
+  $("s-dup").textContent       = D.pcc.augmented_edges.length;
+  $("s-odd-after").textContent = oddAfter + (oddAfter === 0 ? " ✓" : " ✗");
+  $("s-steps").textContent     = D.pcc.circuit.length-1;
+
+  $("circuit-scroll").textContent = D.pcc.circuit.join(" → ");
+  $("s-kru").textContent = `${D.kruskal.total_cost}  (${D.kruskal.edges.length} arestas)`;
+  $("s-pri").textContent = `${D.prim.total_cost}  (${D.prim.edges.length} arestas)`;
+
+  $("complexity-body").innerHTML =
+    Object.entries(D.complexity).map(([k,v]) => `<div><span>${k}</span>: ${v}</div>`).join("");
+}
+
+function buildMatrix() {
+  if (!D) return;
+  const ids   = D.node_ids;
+  const limit = Math.min(ids.length, 35);
+  const mat   = D.adjacency_matrix;
+
+  let html = "<table><tr><th></th>";
+  for (let j = 0; j < limit; j++) html += `<th>${ids[j]}</th>`;
+  html += "</tr>";
+  for (let i = 0; i < limit; i++) {
+    html += `<tr><th>${ids[i]}</th>`;
+    for (let j = 0; j < limit; j++) {
+      const v = mat[i][j];
+      if (i===j)  html += `<td class="di">·</td>`;
+      else if (v) html += `<td class="nz">${v}</td>`;
+      else        html += `<td>0</td>`;
+    }
+    html += "</tr>";
+  }
+  html += "</table>";
+  if (ids.length > 35)
+    html += `<p style="margin-top:8px;font-size:.68rem;color:var(--muted);font-style:italic">Exibindo ${limit} de ${ids.length} nós</p>`;
+  $("mat-wrap").innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════
+//  TOOLTIP — mostra grau original → grau após PCC
+// ══════════════════════════════════════════════════
+cv.addEventListener("mousemove", e => {
+  if (!D) return;
+  const r = cv.getBoundingClientRect();
+  const mx = e.clientX-r.left, my = e.clientY-r.top;
+  const tip = $("tip");
+  for (const nd of D.nodes) {
+    const {x,y} = nodeXY(nd);
+    if (Math.hypot(mx-x,my-y) < 14) {
+      const degLine = (mode === "pcc" || mode === "fleury")
+        ? `grau: ${nd.degree} → <b style="color:var(--green)">${nd.degree_pcc}</b>`
+        : `grau: ${nd.degree}`;
+      tip.innerHTML = `id: ${nd.id}<br>${degLine}<br>(${nd.x.toFixed(3)}, ${nd.y.toFixed(3)})`;
+      tip.style.opacity="1"; tip.style.left=(e.clientX+14)+"px"; tip.style.top=(e.clientY-8)+"px";
+      return;
+    }
+  }
+  tip.style.opacity="0";
+});
+
+// ══════════════════════════════════════════════════
+//  WIRING
+// ══════════════════════════════════════════════════
+$("btn-gen").addEventListener("click", generateGraph);
+$("btn-pcc").addEventListener("click", startPCC);
+$("btn-mst").addEventListener("click", startMST);
+$("btn-play").addEventListener("click", startFleury);
+$("btn-stop").addEventListener("click", () => { stopAnim(); setTag("PAUSADO", "#52527a"); draw(); });
+$("n-input").addEventListener("keydown", e => { if (e.key === "Enter") generateGraph(); });
+
+window.addEventListener("load", resizeCanvas);
+</script>
+</body>
+</html>
