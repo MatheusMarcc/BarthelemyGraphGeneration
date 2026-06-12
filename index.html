@@ -138,6 +138,29 @@ canvas { display:block; width:100%; height:100%; }
 
 /* MATRIX PANE */
 #pane-matrix { grid-column:1; grid-row:2; overflow:auto; padding:30px 12px 12px; }
+
+/* ── MATRIX TOOLBAR ── */
+#mat-toolbar {
+  position:absolute; top:6px; right:12px;
+  display:flex; align-items:center; gap:6px; z-index:10;
+}
+.mat-toggle {
+  display:flex; background:var(--surface2); border:1px solid var(--border);
+  border-radius:5px; overflow:hidden;
+}
+.mat-toggle button {
+  border:none; border-radius:0; padding:3px 10px;
+  font-size:.68rem; font-weight:700; letter-spacing:.06em;
+  background:transparent; color:var(--muted);
+  transition:background .12s, color .12s;
+}
+.mat-toggle button.active { background:var(--navy); color:var(--blue); }
+.mat-toggle button:first-child { border-right:1px solid var(--border); }
+#mat-info {
+  font-size:.65rem; color:var(--muted); font-family:var(--mono);
+  white-space:nowrap;
+}
+
 table { border-collapse:collapse; font-family:var(--mono); font-size:.63rem; white-space:nowrap; }
 th {
   background:#0e0e1c; color:var(--muted); padding:3px 7px;
@@ -145,8 +168,9 @@ th {
 }
 th:first-child { position:sticky; left:0; z-index:3; }
 td { padding:2px 7px; border:1px solid #14142a; text-align:center; color:var(--muted); }
-td.nz { color:var(--blue); background:#0a1220; }
-td.di { color:#1e1e38; }
+td.nz  { color:var(--blue);   background:#0a1220; }
+td.nzb { color:var(--green);  background:#041510; }  /* adjacência: célula = 1 */
+td.di  { color:#1e1e38; }
 
 /* PROGRESS */
 #prog-wrap { position:absolute; bottom:0; left:0; right:0; height:3px; background:#14142a; }
@@ -264,6 +288,14 @@ td.di { color:#1e1e38; }
 
   <div class="pane" id="pane-matrix">
     <span class="pane-label">MATRIZ DE ADJACÊNCIA</span>
+    <!-- toolbar: toggle de tipo + info -->
+    <div id="mat-toolbar">
+      <span id="mat-info"></span>
+      <div class="mat-toggle">
+        <button id="btn-mat-weight" class="active" onclick="setMatMode('weight')">PESOS</button>
+        <button id="btn-mat-adj"               onclick="setMatMode('adj')">0 / 1</button>
+      </div>
+    </div>
     <div id="mat-wrap"></div>
   </div>
 
@@ -275,23 +307,23 @@ td.di { color:#1e1e38; }
 // ══════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════
-let D = null;            // dados vindos do servidor
-let mode = "base";       // base | pcc | mst | fleury
+let D = null;
+let mode = "base";
 let mstAlgo = "kruskal";
 let animTimer = null;
+let matMode = "weight";   // "weight" | "adj"
 
-// progresso de cada animação (cada modo apaga o anterior)
-let baseStep = 0;        // arestas base reveladas
-let pccStep  = 0;        // arestas duplicadas reveladas
-let mstStep  = 0;        // passos do algoritmo MST revelados
-let fleuryStep = 0;      // passos do circuito Euleriano
+let baseStep = 0;
+let pccStep  = 0;
+let mstStep  = 0;
+let fleuryStep = 0;
 
 const cv  = document.getElementById("cv");
 const ctx = cv.getContext("2d");
 const $   = id => document.getElementById(id);
 
 // ══════════════════════════════════════════════════
-//  GERAÇÃO — o n vem DA INTERFACE; o servidor gera na hora
+//  GERAÇÃO
 // ══════════════════════════════════════════════════
 async function generateGraph() {
   stopAnim();
@@ -323,7 +355,7 @@ async function generateGraph() {
   updateSidebar();
   buildMatrix();
   resizeCanvas();
-  startBaseAnim();          // grafo base entra animado
+  startBaseAnim();
 }
 
 // ══════════════════════════════════════════════════
@@ -350,34 +382,30 @@ function nodeXY(node) {
 
 const ekey = (u,v) => `${Math.min(u,v)}_${Math.max(u,v)}`;
 
-// curvatura da k-ésima cópia de uma aresta (0 = reta; 1,2,3.. = curvas paralelas)
-// as curvas SEMPRE começam e terminam exatamente no centro dos vértices.
 function curveK(c) {
   if (c === 0) return 0;
   return 26 * Math.ceil(c/2) * (c % 2 === 1 ? 1 : -1);
 }
 
-// desenha aresta como curva quadrática ancorada nos dois vértices
 function edgePath(x1,y1,x2,y2,k) {
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   if (k === 0) { ctx.lineTo(x2, y2); return {mx:(x1+x2)/2, my:(y1+y2)/2}; }
   const dx = x2-x1, dy = y2-y1, len = Math.hypot(dx,dy) || 1;
-  const px = -dy/len, py = dx/len;                  // perpendicular unitário
+  const px = -dy/len, py = dx/len;
   const cx = (x1+x2)/2 + px*k, cy = (y1+y2)/2 + py*k;
   ctx.quadraticCurveTo(cx, cy, x2, y2);
-  return {mx:(x1+x2)/2 + px*k/2, my:(y1+y2)/2 + py*k/2}; // ponto médio da curva
+  return {mx:(x1+x2)/2 + px*k/2, my:(y1+y2)/2 + py*k/2};
 }
 
 // ══════════════════════════════════════════════════
-//  DRAW — renderização EXCLUSIVA por modo
+//  DRAW
 // ══════════════════════════════════════════════════
 function draw() {
   if (!D) return;
   const w = W(), h = H();
   ctx.clearRect(0, 0, w, h);
 
-  // grid sutil
   ctx.strokeStyle = "#0e0e1c"; ctx.lineWidth = 1;
   for (let x = 0; x < w; x += 44) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
   for (let y = 0; y < h; y += 44) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
@@ -396,7 +424,6 @@ function draw() {
   drawNodes(nm, showLabels);
 }
 
-// ── MODO BASE: só o grafo original, arestas surgindo ──
 function drawBase(nm, showWeights) {
   for (let i = 0; i < Math.min(baseStep, D.edges.length); i++) {
     const e = D.edges[i];
@@ -411,9 +438,7 @@ function drawBase(nm, showWeights) {
   }
 }
 
-// ── MODO PCC / FLEURY: base + arestas DUPLICADAS (multigrafo) ──
 function drawPCC(nm, showWeights, fleuryMode) {
-  // arestas base
   D.edges.forEach(e => {
     const a = nodeXY(nm[e.source]), b = nodeXY(nm[e.target]);
     ctx.setLineDash([]);
@@ -425,8 +450,7 @@ function drawPCC(nm, showWeights, fleuryMode) {
     }
   });
 
-  // arestas duplicadas — cada cópia é uma CURVA ancorada nos vértices
-  const copies = {};   // quantas cópias já desenhadas por par
+  const copies = {};
   const limit = fleuryMode ? D.pcc.augmented_edges.length : Math.min(pccStep, D.pcc.augmented_edges.length);
   ctx.setLineDash([6,4]);
   for (let i = 0; i < limit; i++) {
@@ -445,7 +469,6 @@ function drawPCC(nm, showWeights, fleuryMode) {
   }
   ctx.setLineDash([]);
 
-  // trilha do Fleury — usa cópia diferente a cada travessia repetida do mesmo par
   if (fleuryMode && fleuryStep > 0) {
     const c = D.pcc.circuit;
     const used = {};
@@ -459,14 +482,12 @@ function drawPCC(nm, showWeights, fleuryMode) {
       g.addColorStop(0, `hsl(${160+t*60},80%,50%)`);
       g.addColorStop(1, `hsl(${160+(t+.03)*60},80%,60%)`);
       ctx.strokeStyle = g; ctx.lineWidth = 2.6;
-      // se o par foi invertido (v<u na trilha), espelha a curvatura p/ casar com a cópia
       const flip = c[i] > c[i+1] ? -1 : 1;
       edgePath(a.x,a.y,b.x,b.y, curveK(pass)*flip); ctx.stroke();
     }
   }
 }
 
-// ── MODO MST: APENAS a árvore, animando o algoritmo ──
 function drawMST(nm, showWeights) {
   const steps = D[mstAlgo].steps;
   const limit = Math.min(mstStep, steps.length);
@@ -476,7 +497,6 @@ function drawMST(nm, showWeights) {
     const isCur    = (i === limit-1 && animTimer);
     const rejected = s.accepted === false;
 
-    // arestas rejeitadas (Kruskal: formariam ciclo) só piscam no passo atual
     if (rejected && !isCur) continue;
 
     const a = nodeXY(nm[s.u]), b = nodeXY(nm[s.v]);
@@ -500,7 +520,6 @@ function drawMST(nm, showWeights) {
   }
 }
 
-// ── NÓS ──
 function drawNodes(nm, showLabels) {
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   const pccDone = (mode === "pcc" && pccStep >= D.pcc.augmented_edges.length) || mode === "fleury";
@@ -512,7 +531,6 @@ function drawNodes(nm, showLabels) {
   D.nodes.forEach(n => {
     const {x,y} = nodeXY(n);
     const isCur = n.id === curNode;
-    // após a duplicação do PCC, TODOS os graus ficam pares → ninguém mais é vermelho
     const deg   = (mode === "pcc" || mode === "fleury") && pccDone ? n.degree_pcc : n.degree;
     const isOdd = deg % 2 === 1;
     const r = isCur ? 10 : (D.n <= 50 ? 7 : 4);
@@ -542,7 +560,7 @@ function drawNodes(nm, showLabels) {
 }
 
 // ══════════════════════════════════════════════════
-//  MOTOR DE ANIMAÇÃO — toda troca de modo apaga a anterior
+//  MOTOR DE ANIMAÇÃO
 // ══════════════════════════════════════════════════
 function speedDelay(fast) { return Math.max(20, (1010 - parseInt($("speed").value)) * (fast ? .35 : 1)); }
 
@@ -567,7 +585,6 @@ function stopAnim() {
   $("step-info").textContent = "";
 }
 
-// grafo base animado
 function startBaseAnim() {
   mode = "base"; baseStep = 0; pccStep = 0; mstStep = 0; fleuryStep = 0;
   setTag("GRAFO BASE", "#4895ef");
@@ -578,13 +595,12 @@ function startBaseAnim() {
   }, () => { baseStep = total; setTag("GRAFO BASE ✓", "#4895ef"); }, true);
 }
 
-// PCC animado: duplicação das arestas, uma a uma
 function startPCC() {
   if (!D) return;
   mode = "pcc"; pccStep = 0; fleuryStep = 0;
   setTag("PCC — DUPLICANDO ARESTAS", "#e63946");
   const aug = D.pcc.augmented_edges, total = aug.length;
-  if (total === 0) {        // grafo já Euleriano
+  if (total === 0) {
     pccStep = 0; draw();
     setTag("PCC — GRAFO JÁ EULERIANO ✓", "#e63946");
     return;
@@ -599,7 +615,6 @@ function startPCC() {
   });
 }
 
-// MST animada: mostra SÓ a árvore, passo a passo do algoritmo
 function startMST() {
   if (!D) return;
   mstAlgo = $("mst-sel").value;
@@ -618,7 +633,6 @@ function startMST() {
   });
 }
 
-// Fleury animado sobre o multigrafo do PCC
 function startFleury() {
   if (!D) return;
   mode = "fleury"; pccStep = D.pcc.augmented_edges.length; fleuryStep = 0;
@@ -668,33 +682,86 @@ function updateSidebar() {
     Object.entries(D.complexity).map(([k,v]) => `<div><span>${k}</span>: ${v}</div>`).join("");
 }
 
+// ── MATRIZ ─────────────────────────────────────────
+// matMode: "weight" → mostra os pesos (original)
+//          "adj"    → mostra 0/1 (conexão existe?)
+function setMatMode(m) {
+  matMode = m;
+  $("btn-mat-weight").classList.toggle("active", m === "weight");
+  $("btn-mat-adj").classList.toggle("active",    m === "adj");
+  buildMatrix();
+}
+
 function buildMatrix() {
   if (!D) return;
-  const ids   = D.node_ids;
-  const limit = Math.min(ids.length, 35);
-  const mat   = D.adjacency_matrix;
+  const ids = D.node_ids;
+  const n   = ids.length;
+  // sem limite — a div tem overflow:auto
+  const mat = D.adjacency_matrix;
 
-  let html = "<table><tr><th></th>";
-  for (let j = 0; j < limit; j++) html += `<th>${ids[j]}</th>`;
-  html += "</tr>";
-  for (let i = 0; i < limit; i++) {
-    html += `<tr><th>${ids[i]}</th>`;
-    for (let j = 0; j < limit; j++) {
-      const v = mat[i][j];
-      if (i===j)  html += `<td class="di">·</td>`;
-      else if (v) html += `<td class="nz">${v}</td>`;
-      else        html += `<td>0</td>`;
-    }
-    html += "</tr>";
+  // info no toolbar
+  $("mat-info").textContent = `${n}×${n}`;
+
+  const isAdj = matMode === "adj";
+
+  // monta tabela: th de linha tem position:sticky left:0
+  // usa DocumentFragment para performance em grafos grandes
+  const frag = document.createDocumentFragment();
+  const tbl  = document.createElement("table");
+
+  // cabeçalho
+  const thead = tbl.createTHead();
+  const hr = thead.insertRow();
+  const cornerTh = document.createElement("th");
+  cornerTh.textContent = isAdj ? "A" : "W";
+  cornerTh.style.background = isAdj ? "#0d1a10" : "#0e0e1c";
+  cornerTh.style.color = isAdj ? "var(--green)" : "var(--muted)";
+  hr.appendChild(cornerTh);
+  for (let j = 0; j < n; j++) {
+    const th = document.createElement("th");
+    th.textContent = ids[j];
+    hr.appendChild(th);
   }
-  html += "</table>";
-  if (ids.length > 35)
-    html += `<p style="margin-top:8px;font-size:.68rem;color:var(--muted);font-style:italic">Exibindo ${limit} de ${ids.length} nós</p>`;
-  $("mat-wrap").innerHTML = html;
+
+  // corpo
+  const tbody = tbl.createTBody();
+  for (let i = 0; i < n; i++) {
+    const tr = tbody.insertRow();
+    // th de linha (sticky left)
+    const rowTh = document.createElement("th");
+    rowTh.textContent = ids[i];
+    tr.appendChild(rowTh);
+
+    for (let j = 0; j < n; j++) {
+      const td = tr.insertCell();
+      const w  = mat[i][j];
+      if (i === j) {
+        td.textContent = "·";
+        td.className   = "di";
+      } else if (w > 0) {
+        if (isAdj) {
+          td.textContent = "1";
+          td.className   = "nzb";
+        } else {
+          td.textContent = w;
+          td.className   = "nz";
+        }
+      } else {
+        td.textContent = "0";
+      }
+    }
+  }
+
+  tbl.appendChild(tbody);
+  frag.appendChild(tbl);
+
+  const wrap = $("mat-wrap");
+  wrap.innerHTML = "";
+  wrap.appendChild(frag);
 }
 
 // ══════════════════════════════════════════════════
-//  TOOLTIP — mostra grau original → grau após PCC
+//  TOOLTIP
 // ══════════════════════════════════════════════════
 cv.addEventListener("mousemove", e => {
   if (!D) return;
